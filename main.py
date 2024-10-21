@@ -1,15 +1,18 @@
 import os
 from dotenv import load_dotenv
 
+import re
+
 import asyncio
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import Message
 from aiogram.filters import Command
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.keyboards import welcome_keyboard
-from src.function_json_file import read_json, write_json
+from src.function_json_file import read_json, write_json, create_dict, update_json
 from src.utils import find_data_in_json
 import pprint
 
@@ -22,17 +25,22 @@ BOT_API = os.getenv('BOT_TOKEN')  # authorization token for bot
 bot = Bot(token=BOT_API)  # pass the bot token to the class
 dp = Dispatcher()  # monitors incoming messages, analyzes them, is responsible for functionality
 
-data = read_json()
-pprint.pp(data)
-data.update({'27.05.2025': {'23:59': 'идти спать'}})
-pprint.pp(data)
-write_json(data)
+# data = read_json()
+# pprint.pp(data)
+# data.update({'27.05.2025': {'23:59': 'идти спать'}})
+# pprint.pp(data)
+# write_json(data)
 
 
+# управление состояниями
 class Schedule(StatesGroup):
     date = State()
     calendar_date = State()
-    language = State()
+    calendar_time = State()
+    calendar_todo = State()
+
+
+storage = MemoryStorage()
 
 
 # Кнопки
@@ -50,7 +58,7 @@ async def about_me_callback(callback: types.CallbackQuery):
     all_my_schedule = read_json()
     await callback.message.answer(f'Вся информация по вашему расписанию:\n')
     for element in all_my_schedule:
-        await callback.message.answer(f'{element}: {all_my_schedule[element]}')
+        await callback.message.answer(f'{element}\n{all_my_schedule[element]}')
 
 
 # Обновить расписание
@@ -88,8 +96,36 @@ async def make_date(message: Message, state: FSMContext):
 # Составить расписание
 @dp.callback_query(F.data == "make_schedule")
 async def about_me_callback(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.answer('Составьте своё расписание!\nВведите дату')
+    """вывод на экран и ввод состояния"""
+    await callback.message.answer('Составьте своё расписание!\n\nВведите дату - день.месяц.год')
     await state.set_state(Schedule.calendar_date)
+
+
+@dp.message(Schedule.calendar_date)
+async def create_data_dict(message: Message, state: FSMContext):
+    """функция запоминает сообщение: Введите дату"""
+    await storage.set_data(key='mydata', data={'date': message.text})
+    await message.answer(f'Дата: {message.text}\n\nВведите время:')
+    await state.set_state(Schedule.calendar_time)
+
+
+@dp.message(Schedule.calendar_time)
+async def update_storage_dict(message: Message, state: FSMContext):
+    """функция запоминает сообщение: Введите время"""
+    await storage.update_data(key='mydata', data={'time': message.text})
+    await message.answer(f'Выбранное время: {message.text}\n\nВведите действие:')
+    await state.set_state(Schedule.calendar_todo)
+
+
+# создание словаря и его запись
+@dp.message(Schedule.calendar_todo)
+async def create_dict(message: Message, state: FSMContext):
+    """функция создаёт и записывает словарь"""
+    to_do = message.text
+    await storage.get_data(key='mydata')
+    await message.answer(f'ToDo: {to_do}')
+    result = storage.get_data(key='time')
+    await message.answer(f'{result}')
 
 
 # Блок кода для вызова функции
