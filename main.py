@@ -122,10 +122,16 @@ async def update_storage_dict(message: Message, state: FSMContext):
 async def create_dict(message: Message, state: FSMContext):
     """функция создаёт и записывает словарь"""
     to_do = message.text
+    result = await storage.get_data(key='mydata')
+    schedule_data = read_json()
+    schedule_data.update({
+        result.get('date'): {
+            result.get('time'): to_do
+        }
+    })
+    write_json(schedule_data)
     await storage.get_data(key='mydata')
-    await message.answer(f'ToDo: {to_do}')
-    result = storage.get_data(key='time')
-    await message.answer(f'{result}')
+    await message.answer(f'Дата: {result.get('date')}\nВремя: {result.get('time')}\nToDo: {to_do}')
 
 
 # Блок кода для вызова функции
